@@ -6,10 +6,10 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Collections;
 
 public class Client extends JFrame {
     private final String SERVER_ADDR = "localhost";
@@ -26,6 +26,9 @@ public class Client extends JFrame {
     private DataInputStream in;
     private DataOutputStream out;
 
+    private String login;
+    private ArrayList<String> history;
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
@@ -36,6 +39,7 @@ public class Client extends JFrame {
     }
 
     public Client() {
+        history = new ArrayList<>();
         prepareGUI();
 
         try {
@@ -54,20 +58,26 @@ public class Client extends JFrame {
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
+
                 try {
                     while (true) {
                         String strFromServer = in.readUTF();
                         if(strFromServer.startsWith("/authok")) {
                             setAuthorized(true);
+                            loadHistory();
+                            showHistory();
                             break;
                         }
                         chatArea.append(strFromServer + "\n");
                     }
+
                     while (true) {
                         String strFromServer = in.readUTF();
                         if (strFromServer.equalsIgnoreCase("/end")) {
                             break;
                         }
+
+                        history.add(strFromServer);
                         chatArea.append(strFromServer);
                         chatArea.append("\n");
                     }
@@ -81,6 +91,37 @@ public class Client extends JFrame {
 
     }
 
+    private void loadHistory(){
+        try(FileInputStream fileInputStream = new FileInputStream(getHistoryFileName());
+            ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)) {
+            history = (ArrayList<String>) objectInputStream.readObject();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void showHistory(){
+        if(history == null){
+            return;
+        }
+        int startIndex = 0;
+        if (history.size() > 100) {
+            startIndex = history.size() - 100;
+        }
+        for ( int i = startIndex; i < history.size() - 1; i++ ) {
+            chatArea.append(history.get(i));
+            chatArea.append("\n");
+        }
+    }
+
+
+    private String getHistoryFileName() {
+        return "src/data/history_" + login + ".txt";
+    }
     private void setAuthorized(boolean authorized) {
 
         CardLayout cl = (CardLayout)(cards.getLayout());
@@ -89,7 +130,7 @@ public class Client extends JFrame {
         }else{
             cl.show(cards, "auth");
         }
-
+        repaint();
     }
 
     public void sendMessage() {
@@ -121,6 +162,14 @@ public class Client extends JFrame {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        try(FileOutputStream fileOutputStream =  new FileOutputStream(getHistoryFileName());
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)) {
+            objectOutputStream.writeObject(history);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public void prepareGUI() {
@@ -138,7 +187,7 @@ public class Client extends JFrame {
         //
         JPanel authPanel = new JPanel(new FlowLayout());
         loginField = new JTextField(10);
-        passField = new JTextField(10);
+        passField = new JPasswordField(10);
         JButton authButton = new JButton("Login");
         authPanel.add(new JLabel("login:"));
         authPanel.add(loginField);
@@ -150,7 +199,8 @@ public class Client extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
-                    out.writeUTF("/auth " + loginField.getText() + " " + passField.getText());
+                    login  = loginField.getText();
+                    out.writeUTF("/auth " + login + " " + passField.getText());
                     loginField.setText("");
                     passField.setText("");
                 } catch (Exception ex) {
