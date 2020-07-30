@@ -5,7 +5,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
-public class ClientHandler {
+public class ClientHandler implements Runnable {
     private Server server;
     private Socket socket;
     private DataInputStream in;
@@ -19,21 +19,20 @@ public class ClientHandler {
             this.in = new DataInputStream(socket.getInputStream());
             this.out = new DataOutputStream(socket.getOutputStream());
             this.name = "";
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        doAuth();
-                        readMessage();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    } finally {
-                        closeConnection();
-                    }
-                }
-            }).start();
         } catch (IOException e) {
             throw new RuntimeException("Error occurred during client handler initialization");
+        }
+    }
+
+    @Override
+    public void run() {
+        try {
+            doAuth();
+            readMessage();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            closeConnection();
         }
     }
 
